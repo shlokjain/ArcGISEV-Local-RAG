@@ -52,8 +52,8 @@ async def query_rag(request: Request):
 
         print(f"Received question: {question}")
         
-        results = vectorstore.similarity_search_with_score(question, k=4)
-        relevant_docs = [doc for doc, score in results if score < 0.8]
+        results = vectorstore.similarity_search_with_score(question, k=10)
+        relevant_docs = [doc for doc, score in results if score < 1]
 
         if not relevant_docs:
             return {

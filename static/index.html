@@ -1,295 +1,395 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ArcGIS Enterprise RAG Chatbot</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.10/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .chat-container {
-            width: 90%;
-            max-width: 800px;
-            height: 80vh;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            display: flex;
-            flex-direction: column;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
             overflow: hidden;
         }
 
-        .chat-header {
-            background: #4a5568;
-            color: white;
-            padding: 20px;
-            text-align: center;
-            font-size: 1.5rem;
-            font-weight: 600;
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
         }
 
-        .chat-messages {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            background: #f7fafc;
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
 
-        .message {
-            margin-bottom: 20px;
+        .glass-header {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(25px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .chat-message {
+            animation: messageSlideIn 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            transform-origin: bottom;
+        }
+
+        @keyframes messageSlideIn {
+            0% {
+                opacity: 0;
+                transform: translateY(20px) scale(0.95);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .user-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .bot-bubble {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            color: #1a202c;
+        }
+
+        .ai-loader {
+            animation: loaderPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes loaderPulse {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.02); opacity: 1; }
+        }
+
+        .thinking-dots {
             display: flex;
-            align-items: flex-start;
+            gap: 6px;
+            align-items: center;
         }
 
-        .message.user {
-            justify-content: flex-end;
+        .thinking-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            animation: thinkingBounce 1.4s infinite ease-in-out both;
         }
 
-        .message-content {
-            max-width: 70%;
-            padding: 15px 20px;
-            border-radius: 20px;
-            word-wrap: break-word;
+        .thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+        .thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+        .thinking-dot:nth-child(3) { animation-delay: 0s; }
+
+        @keyframes thinkingBounce {
+            0%, 80%, 100% {
+                transform: scale(0.8) translateY(0);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1.1) translateY(-10px);
+                opacity: 1;
+            }
         }
 
-        .message.user .message-content {
-            background: #4299e1;
-            color: white;
-            border-bottom-right-radius: 5px;
+
+
+        .loading-text {
+            background: linear-gradient(45deg, #667eea, #764ba2, #f093fb);
+            background-size: 200% 200%;
+            animation: textShimmer 3s ease-in-out infinite;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
-        .message.bot .message-content {
-            background: white;
-            border: 1px solid #e2e8f0;
-            border-bottom-left-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        @keyframes textShimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .typewriter-cursor {
+            display: inline-block;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            width: 2px;
+            height: 1.2em;
+            margin-left: 2px;
+            animation: cursorBlink 1s infinite;
+            border-radius: 1px;
+        }
+
+        @keyframes cursorBlink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
         }
 
         .message-content pre {
-            background: #2d3748;
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
             color: #e2e8f0;
-            padding: 10px;
-            border-radius: 8px;
+            padding: 1.5rem;
+            border-radius: 12px;
             overflow-x: auto;
-            margin: 10px 0;
+            margin: 1rem 0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
 
         .message-content code:not(pre code) {
-            background: #edf2f7;
-            color: #2d3748;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.9em;
+            background: rgba(102, 126, 234, 0.15);
+            color: #667eea;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.875em;
+            font-weight: 500;
         }
 
-        .message-content h1, .message-content h2, .message-content h3 {
-            margin: 15px 0 10px 0;
-            color: #2d3748;
+        .input-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            transition: all 0.3s ease;
         }
 
-        .message-content ul, .message-content ol {
-            margin: 10px 0;
-            padding-left: 20px;
+        .input-container:focus-within {
+            border-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 0 30px rgba(102, 126, 234, 0.3);
         }
 
-        .message-content blockquote {
-            border-left: 4px solid #4299e1;
-            margin: 10px 0;
-            padding-left: 15px;
-            color: #4a5568;
-            font-style: italic;
-        }
-
-        .chat-input {
-            padding: 20px;
-            background: white;
-            border-top: 1px solid #e2e8f0;
-            display: flex;
-            gap: 10px;
-        }
-
-        .input-field {
-            flex: 1;
-            padding: 15px 20px;
-            border: 2px solid #e2e8f0;
-            border-radius: 25px;
-            font-size: 16px;
-            outline: none;
-            transition: border-color 0.3s;
-        }
-
-        .input-field:focus {
-            border-color: #4299e1;
-        }
-
-        .send-button {
-            padding: 15px 25px;
-            background: #4299e1;
-            color: white;
+        .custom-input {
+            background: transparent;
             border: none;
-            border-radius: 25px;
-            cursor: pointer;
+            outline: none;
+            color: white;
+            font-size: 16px;
+            padding: 16px 20px;
+            flex: 1;
+        }
+
+        .custom-input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .send-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 12px 24px;
+            border-radius: 15px;
+            margin: 4px;
+            color: white;
             font-weight: 600;
-            transition: background-color 0.3s;
-        }
-
-        .send-button:hover:not(:disabled) {
-            background: #3182ce;
-        }
-
-        .send-button:disabled {
-            background: #a0aec0;
-            cursor: not-allowed;
-        }
-
-        .typing-indicator {
-            display: none;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .typing-indicator.show {
-            display: flex;
-        }
-
-        .typing-dots {
-            display: flex;
-            gap: 4px;
-            margin-left: 20px;
-        }
-
-        .typing-dots span {
-            width: 8px;
-            height: 8px;
-            background: #a0aec0;
-            border-radius: 50%;
-            animation: typing 1.4s infinite;
-        }
-
-        .typing-dots span:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-
-        .typing-dots span:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-
-        @keyframes typing {
-            0%, 60%, 100% {
-                transform: translateY(0);
-            }
-            30% {
-                transform: translateY(-10px);
-            }
-        }
-
-        .error-message {
-            background: #fed7d7;
-            color: #c53030;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            border-left: 4px solid #e53e3e;
-        }
-
-        .reasoning-section {
-            background: #f0f8ff;
-            border: 1px solid #bee3f8;
-            border-radius: 8px;
-            margin: 10px 0;
-            overflow: hidden;
-        }
-
-        .reasoning-header {
-            background: #ebf8ff;
-            padding: 10px 15px;
-            border-bottom: 1px solid #bee3f8;
             cursor: pointer;
+            transition: all 0.3s ease;
             display: flex;
             align-items: center;
             gap: 8px;
-            font-weight: 600;
-            color: #2b6cb0;
         }
 
-        .reasoning-header:hover {
-            background: #e6fffa;
+        .send-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
         }
 
-        .reasoning-content {
-            padding: 15px;
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-            font-size: 0.9em;
-            color: #4a5568;
-            line-height: 1.5;
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
         }
 
-        .reasoning-content.expanded {
-            max-height: 500px;
-            overflow-y: auto;
+        .floating-particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .particle {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            animation: floatParticles 20s infinite linear;
+        }
+
+        @keyframes floatParticles {
+            0% {
+                transform: translateY(100vh) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-100px) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        .chat-container {
+            z-index: 10;
+            position: relative;
         }
 
         .reasoning-toggle {
-            transition: transform 0.3s ease;
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 10px;
+            transition: all 0.3s ease;
         }
 
-        .reasoning-toggle.expanded {
-            transform: rotate(90deg);
+        .reasoning-toggle:hover {
+            background: rgba(102, 126, 234, 0.2);
+            transform: translateY(-1px);
         }
 
-        .response-section {
-            margin-top: 10px;
+        .avatar-glow {
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
+            animation: avatarGlow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes avatarGlow {
+            0% { box-shadow: 0 0 20px rgba(102, 126, 234, 0.6); }
+            100% { box-shadow: 0 0 30px rgba(102, 126, 234, 0.8); }
+        }
+
+        .brand-gradient {
+            background: linear-gradient(45deg, #667eea, #764ba2, #f093fb);
+            background-size: 200% 200%;
+            animation: brandShimmer 4s ease-in-out infinite;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        @keyframes brandShimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .scroll-fade {
+            mask-image: linear-gradient(to bottom, transparent 0%, black 20px, black calc(100% - 20px), transparent 100%);
         }
     </style>
 </head>
 <body>
-    <div class="chat-container">
-        <div class="chat-header">
-            🏢 ArcGIS Enterprise RAG Assistant
-        </div>
-        
-        <div class="chat-messages" id="chatMessages">
-            <div class="message bot">
-                <div class="message-content">
-                    <strong>Welcome!</strong> I'm your ArcGIS Enterprise assistant. I can help you with questions about configuring and deploying ArcGIS Enterprise for raster analytics. Ask me anything!
+    <!-- Floating Particles Background -->
+    <div class="floating-particles" id="particles"></div>
+
+    <div class="chat-container container mx-auto p-6 h-screen flex flex-col max-w-5xl">
+        <!-- Elegant Header -->
+        <div class="glass-card glass-header rounded-2xl mb-6 overflow-hidden">
+            <div class="p-6">
+                <div class="flex items-center justify-center space-x-4">
+                    <div class="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center avatar-glow">
+                        <i class="fas fa-robot text-white text-xl"></i>
+                    </div>
+                    <div class="text-center">
+                        <h1 class="text-3xl font-bold brand-gradient mb-1">
+                            ArcGIS Enterprise RAG Assistant
+                        </h1>
+                        <p class="text-white/70 text-sm font-medium">
+                            Powered by Advanced Vector Search & Large Language Models
+                        </p>
+                    </div>
+                    <div class="px-3 py-1 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full text-white text-xs font-semibold">
+                        ✨ AI Powered
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="typing-indicator" id="typingIndicator">
-            <div class="typing-dots">
-                <span></span>
-                <span></span>
-                <span></span>
+        <!-- Chat Messages Container -->
+        <div class="glass-card rounded-2xl flex-1 mb-6 overflow-hidden">
+            <div class="h-full flex flex-col">
+                <div class="flex-1 overflow-y-auto p-6 space-y-6 scroll-fade" id="chatMessages">
+                    <!-- Welcome Message -->
+                    <div class="chat-message flex items-start space-x-4">
+                        <div class="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-robot text-white text-sm"></i>
+                        </div>
+                        <div class="bot-bubble max-w-2xl p-4 rounded-2xl rounded-tl-md">
+                            <div class="font-semibold text-lg mb-2 flex items-center">
+                                <span>Welcome! 🏢</span>
+                                <div class="ml-auto text-xs opacity-60">AI Assistant</div>
+                            </div>
+                            <div class="leading-relaxed">
+                                I'm your advanced ArcGIS Enterprise assistant. I can help you with configuration, deployment, troubleshooting, and best practices for raster analytics. Ask me anything!
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gorgeous AI Loader -->
+                <div class="hidden px-6 pb-6" id="aiLoader">
+                    <div class="ai-loader chat-message flex items-start space-x-4">
+                        <div class="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0 avatar-glow">
+                            <i class="fas fa-brain text-white text-sm animate-pulse"></i>
+                        </div>
+                        <div class="bot-bubble max-w-2xl p-5 rounded-2xl rounded-tl-md">
+                            <div class="flex items-center space-x-4 mb-4">
+                                <div class="thinking-dots">
+                                    <div class="thinking-dot"></div>
+                                    <div class="thinking-dot"></div>
+                                    <div class="thinking-dot"></div>
+                                </div>
+                                <div>
+                                    <div class="font-semibold text-sm mb-1">AI Processing</div>
+                                    <div class="loading-text text-xs font-medium" id="loaderText">
+                                        Initializing neural networks...
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Beautiful Progress Steps -->
+                            <div class="space-y-3" id="progressSteps">
+                                <!-- Steps will be dynamically added here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <span style="margin-left: 10px; color: #4a5568;">Assistant is thinking...</span>
+        </div>
+
+        <!-- Elegant Input Area -->
+        <div class="input-container">
+            <div class="flex items-center">
+                <input 
+                    type="text" 
+                    id="messageInput" 
+                    class="custom-input" 
+                    placeholder="Ask me about ArcGIS Enterprise configuration, deployment, or troubleshooting..."
+                    maxlength="500"
+                >
+                <button id="sendButton" class="send-btn">
+                    <i class="fas fa-paper-plane"></i>
+                    <span>Send</span>
+                </button>
+            </div>
         </div>
         
-        <div class="chat-input">
-            <input 
-                type="text" 
-                id="messageInput" 
-                class="input-field" 
-                placeholder="Ask me about ArcGIS Enterprise..."
-                maxlength="500"
-            >
-            <button id="sendButton" class="send-button">Send</button>
+        <div class="text-center text-white/50 text-xs mt-3 font-medium">
+            <i class="fas fa-database mr-1"></i>
+            Local RAG Model • 10,000+ ESRI Docs Embedded • ArcGIS Enterprise Specialist
         </div>
     </div>
 
@@ -297,143 +397,271 @@
         const chatMessages = document.getElementById('chatMessages');
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
-        const typingIndicator = document.getElementById('typingIndicator');
+        const aiLoader = document.getElementById('aiLoader');
+        const loaderText = document.getElementById('loaderText');
+        const progressSteps = document.getElementById('progressSteps');
+
+        // Create floating particles
+        function createParticles() {
+            const particlesContainer = document.getElementById('particles');
+            
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.width = Math.random() * 4 + 2 + 'px';
+                particle.style.height = particle.style.width;
+                particle.style.animationDelay = Math.random() * 20 + 's';
+                particle.style.animationDuration = (Math.random() * 10 + 15) + 's';
+                particlesContainer.appendChild(particle);
+            }
+        }
+
+        // ESRI-focused loading messages
+        const loadingMessages = [
+            "🔍 Analyzing ArcGIS Enterprise question with local AI...",
+            "🏢 Processing query through ESRI-trained language model...", 
+            "📚 Searching embedded ArcGIS knowledge vectors...",
+            "🎯 Finding relevant ESRI documentation and guides...",
+            "⚡ Retrieving enterprise deployment best practices...",
+            "🔬 Cross-referencing ArcGIS configuration patterns...",
+            "💡 Synthesizing ESRI-specific solution...",
+            "✨ Adding expert ArcGIS Enterprise insights..."
+        ];
+
+        const progressStepsData = [
+            { icon: "fas fa-search", text: "Analyzing ArcGIS Enterprise query", color: "text-blue-400" },
+            { icon: "fas fa-database", text: "Searching embedded ESRI knowledge base", color: "text-purple-400" },
+            { icon: "fas fa-file-alt", text: "Retrieving ArcGIS deployment guides", color: "text-green-400" },
+            { icon: "fas fa-brain", text: "Processing with ESRI-trained local model", color: "text-pink-400" },
+            { icon: "fas fa-tools", text: "Generating ArcGIS Enterprise solution", color: "text-yellow-400" }
+        ];
+
+        let currentLoaderIndex = 0;
+        let currentStepIndex = 0;
+        let loaderInterval;
 
         function addMessage(content, isUser = false, data = null) {
             const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
+            messageDiv.className = 'chat-message flex items-start space-x-4';
             
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content';
+            // Avatar
+            const avatar = document.createElement('div');
+            avatar.className = `w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                isUser ? 'bg-gradient-to-r from-green-400 to-emerald-500' : 'bg-gradient-to-r from-blue-500 to-purple-600'
+            }`;
+            avatar.innerHTML = `<i class="fas ${isUser ? 'fa-user' : 'fa-robot'} text-white text-sm"></i>`;
+            
+            // Message bubble
+            const bubble = document.createElement('div');
+            bubble.className = `max-w-2xl p-4 rounded-2xl ${
+                isUser 
+                    ? 'user-bubble text-white rounded-tr-md ml-auto' 
+                    : 'bot-bubble rounded-tl-md'
+            }`;
             
             if (isUser) {
-                contentDiv.textContent = content;
-                messageDiv.appendChild(contentDiv);
-                chatMessages.appendChild(messageDiv);
+                bubble.textContent = content;
+                messageDiv.appendChild(bubble);
+                messageDiv.appendChild(avatar);
+                messageDiv.style.justifyContent = 'flex-end';
             } else {
-                // For bot messages with structured data
-                if (data && (data.reasoning || data.raw_response)) {
-                    // Add reasoning section if available
-                    if (data.reasoning) {
-                        const reasoningSection = document.createElement('div');
-                        reasoningSection.className = 'reasoning-section';
-                        
-                        const reasoningHeader = document.createElement('div');
-                        reasoningHeader.className = 'reasoning-header';
-                        reasoningHeader.innerHTML = `
-                            <span class="reasoning-toggle">▶</span>
-                            <span>🧠 AI Thinking Process</span>
-                        `;
-                        
-                        const reasoningContent = document.createElement('div');
-                        reasoningContent.className = 'reasoning-content';
-                        reasoningContent.textContent = data.reasoning;
-                        
-                        // Toggle functionality
-                        reasoningHeader.addEventListener('click', () => {
-                            const toggle = reasoningHeader.querySelector('.reasoning-toggle');
-                            const content = reasoningContent;
-                            
-                            if (content.classList.contains('expanded')) {
-                                content.classList.remove('expanded');
-                                toggle.classList.remove('expanded');
-                            } else {
-                                content.classList.add('expanded');
-                                toggle.classList.add('expanded');
-                            }
-                        });
-                        
-                        reasoningSection.appendChild(reasoningHeader);
-                        reasoningSection.appendChild(reasoningContent);
-                        contentDiv.appendChild(reasoningSection);
-                    }
+                // Bot message with reasoning if available
+                if (data && data.reasoning) {
+                    const reasoningDiv = document.createElement('div');
+                    reasoningDiv.className = 'reasoning-toggle p-3 mb-3 rounded-lg cursor-pointer';
+                    reasoningDiv.innerHTML = `
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <i class="fas fa-brain text-purple-500"></i>
+                                <span class="font-medium text-sm">AI Thinking Process</span>
+                            </div>
+                            <i class="fas fa-chevron-down transform transition-transform" id="reasoningChevron"></i>
+                        </div>
+                        <div class="hidden mt-3 text-sm opacity-80 leading-relaxed" id="reasoningContent">
+                            ${data.reasoning}
+                        </div>
+                    `;
                     
-                    // Add main response section
-                    const responseSection = document.createElement('div');
-                    responseSection.className = 'response-section';
-                    contentDiv.appendChild(responseSection);
+                    reasoningDiv.addEventListener('click', () => {
+                        const content = reasoningDiv.querySelector('#reasoningContent');
+                        const chevron = reasoningDiv.querySelector('#reasoningChevron');
+                        content.classList.toggle('hidden');
+                        chevron.classList.toggle('rotate-180');
+                    });
                     
-                    messageDiv.appendChild(contentDiv);
-                    chatMessages.appendChild(messageDiv);
-                    typewriterEffect(responseSection, content);
-                } else {
-                    // Regular bot message
-                    messageDiv.appendChild(contentDiv);
-                    chatMessages.appendChild(messageDiv);
-                    typewriterEffect(contentDiv, content);
+                    bubble.appendChild(reasoningDiv);
                 }
+                
+                const responseDiv = document.createElement('div');
+                responseDiv.className = 'response-content';
+                bubble.appendChild(responseDiv);
+                
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(bubble);
+                chatMessages.appendChild(messageDiv);
+                
+                progressiveMarkdownRender(responseDiv, content);
+                return;
             }
             
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
         }
 
-        function typewriterEffect(element, content) {
-            const markdownHtml = marked.parse(content);
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = markdownHtml;
-            const textContent = tempDiv.textContent || tempDiv.innerText || '';
-            
+        function progressiveMarkdownRender(element, content) {
             element.innerHTML = '';
+            let currentContent = '';
             let index = 0;
-            const charsPerFrame = 3; // Type multiple characters at once for speed
-            const baseDelay = 8; // Much faster base delay (was 20ms)
             
-            function typeChars() {
-                if (index < textContent.length) {
-                    // Type multiple characters at once for faster display
-                    const endIndex = Math.min(index + charsPerFrame, textContent.length);
-                    const currentText = textContent.substring(0, endIndex);
+            const cursor = document.createElement('span');
+            cursor.className = 'typewriter-cursor';
+            element.appendChild(cursor);
+            
+            function typeCharacter() {
+                if (index < content.length) {
+                    currentContent += content[index];
                     
-                    // Only re-parse markdown every few characters to improve performance
-                    if (endIndex === textContent.length || endIndex % 10 === 0) {
-                        element.innerHTML = marked.parse(currentText);
-                    } else {
-                        // For intermediate steps, just show plain text for speed
-                        element.textContent = currentText;
+                    try {
+                        const markdownHtml = marked.parse(currentContent);
+                        element.innerHTML = markdownHtml + '<span class="typewriter-cursor"></span>';
+                    } catch (e) {
+                        element.innerHTML = currentContent + '<span class="typewriter-cursor"></span>';
                     }
                     
-                    index = endIndex;
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                    index++;
+                    scrollToBottom();
                     
-                    // Variable speed: faster for long responses
-                    const dynamicDelay = textContent.length > 500 ? baseDelay / 2 : baseDelay;
-                    setTimeout(typeChars, dynamicDelay);
+                    let delay = 15;
+                    if (content.length > 500) delay = 8;
+                    if (content[index - 1] === '\n') delay = 80;
+                    if (/[.!?]/.test(content[index - 1])) delay = 150;
+                    
+                    setTimeout(typeCharacter, delay);
                 } else {
-                    // Final render with proper markdown formatting
-                    element.innerHTML = markdownHtml;
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                    element.innerHTML = marked.parse(content);
+                    scrollToBottom();
                 }
             }
             
-            typeChars();
+            typeCharacter();
+        }
+
+        function showAILoader() {
+            aiLoader.classList.remove('hidden');
+            currentLoaderIndex = 0;
+            currentStepIndex = 0;
+            
+            // Rotate loading messages
+            loaderInterval = setInterval(() => {
+                loaderText.textContent = loadingMessages[currentLoaderIndex];
+                currentLoaderIndex = (currentLoaderIndex + 1) % loadingMessages.length;
+            }, 2500);
+            
+            // Show progress steps one at a time with fade transitions
+            function showNextStep() {
+                if (currentStepIndex < progressStepsData.length) {
+                    const step = progressStepsData[currentStepIndex];
+                    
+                    // Clear previous step
+                    progressSteps.innerHTML = '';
+                    
+                    // Create new step
+                    const stepDiv = document.createElement('div');
+                    stepDiv.className = 'progress-step flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10 opacity-0 transform translate-x-4';
+                    stepDiv.innerHTML = `
+                        <div class="flex items-center space-x-3">
+                            <i class="${step.icon} ${step.color} animate-spin"></i>
+                            <span class="text-sm font-medium">${step.text}</span>
+                        </div>
+                        <i class="fas fa-check text-green-400 opacity-0" id="checkIcon"></i>
+                    `;
+                    progressSteps.appendChild(stepDiv);
+                    
+                    // Fade in animation
+                    setTimeout(() => {
+                        stepDiv.style.transition = 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                        stepDiv.style.opacity = '1';
+                        stepDiv.style.transform = 'translateX(0)';
+                    }, 50);
+                    
+                    // Complete step after processing time
+                    setTimeout(() => {
+                        const icon = stepDiv.querySelector('i');
+                        const checkIcon = stepDiv.querySelector('#checkIcon');
+                        icon.classList.remove('animate-spin');
+                        icon.style.color = '#10b981'; // green
+                        checkIcon.style.opacity = '1';
+                        
+                        // Add completed glow effect
+                        stepDiv.style.boxShadow = '0 0 20px rgba(16, 185, 129, 0.3)';
+                    }, 1500);
+                    
+                    // Fade out and move to next step
+                    setTimeout(() => {
+                        stepDiv.style.opacity = '0.3';
+                        stepDiv.style.transform = 'translateX(-10px) scale(0.95)';
+                        
+                        currentStepIndex++;
+                        
+                        // Show next step after fade out
+                        setTimeout(showNextStep, 300);
+                    }, 2200);
+                    
+                    scrollToBottom();
+                } else {
+                    // All steps completed, cycle back or clear
+                    currentStepIndex = 0;
+                    setTimeout(showNextStep, 500);
+                }
+            }
+            
+            // Start the step sequence
+            setTimeout(showNextStep, 500);
+            
+            scrollToBottom();
+        }
+
+        function hideAILoader() {
+            aiLoader.classList.add('hidden');
+            clearInterval(loaderInterval);
+            currentStepIndex = progressStepsData.length; // Stop the step cycling
+        }
+
+        function scrollToBottom() {
+            setTimeout(() => {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }, 50);
         }
 
         function addErrorMessage(error) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error-message';
-            errorDiv.innerHTML = `<strong>Error:</strong> ${error}`;
-            chatMessages.appendChild(errorDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        function showTyping() {
-            typingIndicator.classList.add('show');
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        function hideTyping() {
-            typingIndicator.classList.remove('show');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message flex items-start space-x-4';
+            
+            const avatar = document.createElement('div');
+            avatar.className = 'w-10 h-10 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0';
+            avatar.innerHTML = '<i class="fas fa-exclamation-triangle text-white text-sm"></i>';
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'max-w-2xl p-4 rounded-2xl rounded-tl-md bg-red-100 border border-red-200';
+            bubble.innerHTML = `<div class="text-red-800"><strong>Error:</strong> ${error}</div>`;
+            
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(bubble);
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
         }
 
         function setLoading(loading) {
             sendButton.disabled = loading;
             messageInput.disabled = loading;
+            
             if (loading) {
-                showTyping();
-                sendButton.textContent = 'Sending...';
+                showAILoader();
+                sendButton.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i><span>Processing</span>';
             } else {
-                hideTyping();
-                sendButton.textContent = 'Send';
+                hideAILoader();
+                sendButton.innerHTML = '<i class="fas fa-paper-plane"></i><span>Send</span>';
             }
         }
 
@@ -441,37 +669,25 @@
             const message = messageInput.value.trim();
             if (!message) return;
 
-            // Add user message
             addMessage(message, true);
             messageInput.value = '';
             setLoading(true);
 
             try {
-                console.log('Sending request to:', window.location.origin + '/query');
-                console.log('Request payload:', { question: message });
-                
                 const response = await fetch('/query', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ question: message })
                 });
 
-                console.log('Response status:', response.status);
-                console.log('Response headers:', response.headers);
-
                 if (!response.ok) {
                     const errorText = await response.text();
-                    console.error('Response error:', errorText);
                     throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
                 }
 
                 const data = await response.json();
-                console.log('Response data:', data);
                 addMessage(data.answer, false, data);
             } catch (error) {
-                console.error('Full error:', error);
                 addErrorMessage(`Failed to get response: ${error.message}. Make sure the API server is running and LM Studio is connected.`);
             } finally {
                 setLoading(false);
@@ -487,7 +703,8 @@
             }
         });
 
-        // Focus input on load
+        // Initialize
+        createParticles();
         messageInput.focus();
     </script>
 </body>
