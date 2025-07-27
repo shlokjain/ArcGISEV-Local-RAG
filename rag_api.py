@@ -11,6 +11,7 @@ import hashlib
 import json
 import redis
 from datetime import datetime
+import time
 
 app = FastAPI()
 
@@ -30,14 +31,51 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def read_index():
     return FileResponse('static/index.html')
 
+def make_lm_studio_request(url: str, payload: dict, timeout: int = 120, max_retries: int = 2):
+    """Make request to LM Studio with retry logic and better timeout handling"""
+    for attempt in range(max_retries + 1):
+        try:
+            print(f"🔗 LM Studio request attempt {attempt + 1}/{max_retries + 1} (timeout: {timeout}s)")
+            response = requests.post(
+                url,
+                headers={"Content-Type": "application/json"},
+                json=payload,
+                timeout=timeout
+            )
+            if response.status_code == 200:
+                return response
+            else:
+                print(f"⚠️ LM Studio returned status {response.status_code}: {response.text}")
+                
+        except requests.exceptions.Timeout:
+            print(f"⏰ Timeout on attempt {attempt + 1} (waited {timeout}s)")
+            if attempt < max_retries:
+                wait_time = 2 ** attempt  # Exponential backoff
+                print(f"🔄 Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+            else:
+                raise Exception(f"LM Studio timeout after {max_retries + 1} attempts")
+                
+        except requests.exceptions.ConnectionError:
+            raise Exception("LM Studio server not responding - please check if it's running")
+        except Exception as e:
+            print(f"❌ LM Studio error on attempt {attempt + 1}: {str(e)}")
+            if attempt == max_retries:
+                raise
+
 class NomicEmbedding(Embeddings):
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        response = requests.post(
-            "http://127.0.0.1:1234/v1/embeddings",
-            headers={"Content-Type": "application/json"},
-            json={"model": "text-embedding-nomic-embed-text-v1.5", "input": texts}
-        )
-        return [d["embedding"] for d in response.json()["data"]]
+        try:
+            payload = {"model": "text-embedding-nomic-embed-text-v1.5", "input": texts}
+            response = make_lm_studio_request(
+                "http://127.0.0.1:1234/v1/embeddings", 
+                payload, 
+                timeout=30  # Shorter timeout for embeddings
+            )
+            return [d["embedding"] for d in response.json()["data"]]
+        except Exception as e:
+            print(f"❌ Embedding failed: {str(e)}")
+            raise Exception(f"Failed to generate embeddings: {str(e)}")
 
     def embed_query(self, text: str) -> List[float]:
         return self.embed_documents([text])[0]
@@ -62,7 +100,7 @@ except:
     redis_client = None
 
 # Configuration
-SEMANTIC_SIMILARITY_THRESHOLD = 0.8  # Much higher threshold - identical questions scoring 0.655!
+SEMANTIC_SIMILARITY_THRESHOLD = 0.7  # Much higher threshold - identical questions scoring 0.655!
 DOCUMENT_CACHE_TTL = 3600  # 1 hour
 SEMANTIC_CACHE_TTL = 7 * 24 * 3600  # 7 days
 
@@ -70,7 +108,7 @@ SEMANTIC_CACHE_TTL = 7 * 24 * 3600  # 7 days
 async def query_rag(request: Request):
     body = await request.json()
     question = body.get("question")
-    
+    print(f"Received question: {question}")
     print(f"\n🔍 Processing query: '{question}'")
     print(f"📊 Cache threshold: {SEMANTIC_SIMILARITY_THRESHOLD}")
     
@@ -217,16 +255,13 @@ async def query_rag(request: Request):
         }
 
         print("Step 1: Sending request to DeepSeek-R1...")
-        deepseek_response = requests.post(
+        deepseek_response = make_lm_studio_request(
             "http://127.0.0.1:1234/v1/chat/completions",
-            headers={"Content-Type": "application/json"},
-            json=deepseek_payload,
-            timeout=60
+            deepseek_payload,
+            timeout=180  # 3 minutes for complex reasoning
         )
         
-        if deepseek_response.status_code != 200:
-            print(f"DeepSeek error: {deepseek_response.status_code} - {deepseek_response.text}")
-            return {"error": f"DeepSeek error: {deepseek_response.status_code}"}
+        # deepseek_response will only be returned if successful due to make_lm_studio_request retry logic
 
         deepseek_result = deepseek_response.json()
         raw_answer = deepseek_result['choices'][0]['message']['content']
@@ -274,57 +309,56 @@ async def query_rag(request: Request):
                 "stream": False
             }
             
-            granite_response = requests.post(
+            granite_response = make_lm_studio_request(
                 "http://127.0.0.1:1234/v1/chat/completions",
-                headers={"Content-Type": "application/json"},
-                json=granite_payload,
-                timeout=60
+                granite_payload,
+                timeout=90  # 1.5 minutes for formatting
             )
             
-            if granite_response.status_code == 200:
-                granite_result = granite_response.json()
-                summarized_answer = granite_result['choices'][0]['message']['content']
-                print(f"Granite formatted response length: {len(summarized_answer)} characters")
-                
-                # === CACHE THE GRANITE RESPONSE ===
-                print("💾 Caching Granite-formatted response...")
-                response_to_cache = {
-                    "answer": summarized_answer,
-                    "reasoning": reasoning if reasoning else None,
-                    "raw_response": final_answer,
-                    "used_granite": True,
-                    "cache_hit": False,
-                    "cached_at": datetime.now().isoformat()
-                }
-                
-                # Store in semantic cache
-                try:
-                    cache_document = Document(
-                        page_content=json.dumps(response_to_cache),
-                        metadata={
-                            "question": question,
-                            "timestamp": datetime.now().isoformat(),
-                            "doc_count": len(relevant_docs),
-                            "response_type": "granite"
-                        }
-                    )
-                    semantic_cache.add_documents([cache_document])
-                    print(f"✅ Successfully cached Granite response for question: '{question[:50]}...'")
-                    print(f"📊 Cache now contains response for future similar queries")
-                except Exception as cache_error:
-                    print(f"❌ Failed to cache Granite response: {cache_error}")
-                    import traceback
-                    traceback.print_exc()
-                
-                return {
-                    "answer": summarized_answer,
-                    "reasoning": reasoning if reasoning else None,
-                    "raw_response": final_answer,
-                    "used_granite": True,
-                    "cache_hit": False
-                }
-            else:
-                print(f"Granite error, using DeepSeek response: {granite_response.status_code}")
+            # granite_response will only be returned if successful due to make_lm_studio_request retry logic
+            granite_result = granite_response.json()
+            summarized_answer = granite_result['choices'][0]['message']['content']
+            print(f"Granite formatted response length: {len(summarized_answer)} characters")
+            
+            # === CACHE THE GRANITE RESPONSE ===
+            print("💾 Caching Granite-formatted response...")
+            response_to_cache = {
+                "answer": summarized_answer,
+                "reasoning": reasoning if reasoning else None,
+                "raw_response": final_answer,
+                "used_granite": True,
+                "cache_hit": False,
+                "cached_at": datetime.now().isoformat()
+            }
+            
+            # Store in semantic cache
+            try:
+                cache_document = Document(
+                    page_content=json.dumps(response_to_cache),
+                    metadata={
+                        "question": question,
+                        "timestamp": datetime.now().isoformat(),
+                        "doc_count": len(relevant_docs),
+                        "response_type": "granite"
+                    }
+                )
+                semantic_cache.add_documents([cache_document])
+                print(f"✅ Successfully cached Granite response for question: '{question[:50]}...'")
+                print(f"📊 Cache now contains response for future similar queries")
+            except Exception as cache_error:
+                print(f"❌ Failed to cache Granite response: {cache_error}")
+                import traceback
+                traceback.print_exc()
+            
+            return {
+                "answer": summarized_answer,
+                "reasoning": reasoning if reasoning else None,
+                "raw_response": final_answer,
+                "used_granite": True,
+                "cache_hit": False
+            }
+        else:
+            print(f"Granite formatting skipped - using DeepSeek response directly")
         
         # === CACHE THE DEEPSEEK RESPONSE (when Granite not used or failed) ===
         print("💾 Caching DeepSeek response...")
@@ -366,10 +400,38 @@ async def query_rag(request: Request):
         }
         
     except Exception as e:
-        print(f"❌ Error in query_rag: {str(e)}")
+        error_msg = str(e)
+        print(f"❌ Error in query_rag: {error_msg}")
         import traceback
         traceback.print_exc()
-        return {"error": f"Server error: {str(e)}"}
+        
+        # Provide user-friendly error messages
+        if "timeout" in error_msg.lower():
+            return {
+                "error": "⏰ The AI model is taking longer than expected to respond. This can happen with complex questions. Please try:\n\n" +
+                        "• **Simplify your question** - Break complex queries into smaller parts\n" +
+                        "• **Check LM Studio** - Ensure models are loaded and GPU/RAM is sufficient\n" +
+                        "• **Try again** - The system will retry automatically\n" +
+                        "• **Restart LM Studio** if issues persist\n\n" +
+                        "The system supports up to 3-minute processing for complex reasoning.",
+                "timeout": True,
+                "technical_error": error_msg
+            }
+        elif "connection" in error_msg.lower():
+            return {
+                "error": "🔗 Cannot connect to LM Studio. Please ensure:\n\n" +
+                        "• **LM Studio is running** on port 1234\n" +
+                        "• **Models are loaded** (DeepSeek-R1, Granite, Nomic)\n" +
+                        "• **Local server is started** in LM Studio\n" +
+                        "• **No firewall blocking** localhost connections",
+                "connection_error": True,
+                "technical_error": error_msg
+            }
+        else:
+            return {
+                "error": f"Server error: {error_msg}",
+                "technical_error": error_msg
+            }
 
 # Add a debug endpoint to check cache contents
 @app.get("/debug/cache")
