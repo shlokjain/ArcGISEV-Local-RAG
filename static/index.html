@@ -466,6 +466,28 @@
                 messageDiv.appendChild(avatar);
                 messageDiv.style.justifyContent = 'flex-end';
             } else {
+                // Add cache hit indicator if present
+                if (data && data.cache_hit) {
+                    const cacheIndicator = document.createElement('div');
+                    cacheIndicator.className = 'mb-3 flex items-center space-x-2 text-xs';
+                    const cacheType = data.cache_type || 'unknown';
+                    const similarity = data.similarity_score ? `${(data.similarity_score * 100).toFixed(1)}%` : '';
+                    
+                    cacheIndicator.innerHTML = `
+                        <div class="px-2 py-1 bg-green-100 text-green-800 rounded-full flex items-center space-x-1">
+                            <i class="fas fa-bolt text-xs"></i>
+                            <span>Cached Response</span>
+                        </div>
+                        <div class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                            <span>${cacheType} cache</span>
+                        </div>
+                        ${similarity ? `<div class="px-2 py-1 bg-purple-100 text-purple-800 rounded-full">
+                            <span>${similarity} similar</span>
+                        </div>` : ''}
+                    `;
+                    bubble.appendChild(cacheIndicator);
+                }
+                
                 // Bot message with reasoning if available
                 if (data && data.reasoning) {
                     const reasoningDiv = document.createElement('div');
@@ -501,7 +523,13 @@
                 messageDiv.appendChild(bubble);
                 chatMessages.appendChild(messageDiv);
                 
-                progressiveMarkdownRender(responseDiv, content);
+                // Skip loader and render instantly for cache hits
+                if (data && data.cache_hit) {
+                    responseDiv.innerHTML = marked.parse(content);
+                    scrollToBottom();
+                } else {
+                    progressiveMarkdownRender(responseDiv, content);
+                }
                 return;
             }
             
@@ -673,6 +701,7 @@
             messageInput.value = '';
             setLoading(true);
 
+            let data = null;
             try {
                 const response = await fetch('/query', {
                     method: 'POST',
@@ -685,12 +714,32 @@
                     throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
                 }
 
-                const data = await response.json();
+                data = await response.json();
+                
+                // Hide loader immediately for cache hits
+                if (data.cache_hit) {
+                    setLoading(false);
+                    console.log(`🚀 Cache hit! Response from ${data.cache_type} cache`);
+                }
+                
                 addMessage(data.answer, false, data);
+                
+                // Show cache performance info
+                if (data.cache_hit) {
+                    console.log(`⚡ Cached response delivered instantly!`);
+                    if (data.similarity_score) {
+                        console.log(`🎯 Similarity score: ${data.similarity_score.toFixed(3)}`);
+                    }
+                } else {
+                    console.log(`🔄 Full AI processing completed`);
+                }
+                
             } catch (error) {
                 addErrorMessage(`Failed to get response: ${error.message}. Make sure the API server is running and LM Studio is connected.`);
             } finally {
-                setLoading(false);
+                if (!data?.cache_hit) {
+                    setLoading(false);
+                }
             }
         }
 
